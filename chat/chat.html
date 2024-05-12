@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple WebSocket Chat</title>
+    <style>
+        #messages {
+            height: 300px;
+            overflow: auto;
+            border: 1px solid #ccc;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+        }
+    </style>
+</head>
+<body>
+<h2>WebSocket Chat Client</h2>
+<div id="messages"></div>
+<label for="messageInput"></label><input type="text" id="messageInput" placeholder="Type a message...">
+<script>
+    let ws;
+
+    function connect() {
+        ws = new WebSocket('ws://' + window.location.hostname + ':3000/ws');
+
+        ws.onopen = function() {
+            addMessage("Connected to WebSocket.");
+        };
+
+        ws.onmessage = function(event) {
+            addMessage("Received: " + event.data);
+        };
+
+        ws.onclose = function() {
+            addMessage("WebSocket closed.");
+        };
+
+        ws.onerror = function(err) {
+            console.error("WebSocket encountered error: ", err.message, "Closing socket");
+            ws.close();
+        };
+    }
+
+    function sendMessage() {
+        let message = document.getElementById('messageInput').value;
+        if (message && ws) {
+            ws.send(message);
+            document.getElementById('messageInput').value = '';
+            addMessage("Sent: " + message);
+        }
+    }
+
+    function addMessage(message) {
+        let messages = document.getElementById('messages');
+        messages.innerHTML += message + '<br>';
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    document.getElementById('messageInput').addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    window.onload = connect;
+</script>
+</body>
+</html>
