@@ -57,7 +57,7 @@ func (s *Server) broadcast(b []byte, sender *websocket.Conn) {
 func main() {
 	server := NewServer()
 	http.Handle("/ws", websocket.Handler(server.handleWS))
-	err := http.ListenAndServe("0.0.0.0:3000", nil)
+	err := http.ListenAndServe(":3000", nil)
 	if err != nil {
 		fmt.Println("Server error:", err)
 	}
