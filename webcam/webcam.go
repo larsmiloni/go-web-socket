@@ -5,10 +5,12 @@ import (
 	"golang.org/x/net/websocket"
 	"io"
 	"net/http"
+	"sync"
 )
 
 type Server struct {
 	connections map[*websocket.Conn]bool
+	mutex       sync.Mutex
 }
 
 func NewServer() *Server {
@@ -19,7 +21,11 @@ func NewServer() *Server {
 
 func (s *Server) handleWS(ws *websocket.Conn) {
 	fmt.Println("new incoming connection from client", ws.RemoteAddr())
+
+	s.mutex.Lock()
 	s.connections[ws] = true
+	s.mutex.Unlock()
+
 	s.readLoop(ws)
 }
 
@@ -37,11 +43,18 @@ func (s *Server) readLoop(ws *websocket.Conn) {
 
 		s.broadcast(msg, ws)
 	}
+
+	s.mutex.Lock()
 	delete(s.connections, ws)
+	s.mutex.Unlock()
+
 	fmt.Println("Connection closed:", ws.RemoteAddr())
 }
 
 func (s *Server) broadcast(b []byte, sender *websocket.Conn) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	for ws := range s.connections {
 		if ws != sender {
 			go func(ws *websocket.Conn) {
