@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Display Webcam Stream</title>
+    <style>
+        #containerSent, #containerReceived {
+            margin: 0 auto;
+            width: 500px;
+            height: 375px;
+            border: 10px #333 solid;
+        }
+        #videoElementSent, #videoElementReceived {
+            width: 500px;
+            height: 375px;
+            background-color: #666;
+        }
+    </style>
+</head>
+<body>
+<button onclick="connect()">Connect to server</button>
+<button onclick="startStream()">Start streaming</button>
+<div id="containerReceived">
+    <video autoplay="true" id="videoElementReceived"></video>
+</div>
+<div id="containerSent">
+    <video autoplay="true" id="videoElementSent"></video>
+</div>
+<script>
+    let videoSent = document.querySelector("#videoElementSent");
+    let mediaRecorder;
+    let ws;
+
+    let mediaSource = new MediaSource();
+    let sourceBuffer;
+    let videoReceived = document.querySelector("#videoElementReceived");
+    videoReceived.src = URL.createObjectURL(mediaSource);
+
+    mediaSource.addEventListener('sourceopen', function() {
+        // Initialize the source buffer when the MediaSource is opened
+        sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp8"');
+    }, false);
+
+    let queue = [];
+    let isAppending = false;
+
+    function handleData(data) {
+        if (data instanceof Blob) {
+            let reader = new FileReader();
+            reader.onload = function() {
+                let arrayBuffer = reader.result;
+                queue.push(new Uint8Array(arrayBuffer));
+                if (!isAppending) {
+                    appendNextBuffer();
+                }
+            };
+            reader.readAsArrayBuffer(data);
+        }
+    }
+
+    function appendNextBuffer() {
+        if (queue.length > 0 && !sourceBuffer.updating) {
+            isAppending = true;
+            try {
+                sourceBuffer.appendBuffer(queue.shift());
+            } catch (err) {
+                console.log("Error appendingBuffer:", err)
+            }
+            sourceBuffer.onupdateend = appendNextBuffer; // Once data is appended, try to append next item in the queue
+        } else {
+            isAppending = false;
+        }
+    }
+
+    function connect() {
+        ws = new WebSocket('ws://10.22.81.226:3000/ws');
+
+        ws.onopen = function(event) {
+            console.log("Connected to WebSocket.", event);
+        };
+
+        ws.onmessage = function(event) {
+            console.log("Data received");
+            handleData(event.data);
+        };
+
+        ws.onclose = function() {
+            console.log("WebSocket closed.");
+        };
+
+        ws.onerror = function(err) {
+            console.error("WebSocket encountered error: ", err.message, "Closing socket");
+            ws.close();
+        };
+    }
+
+    function startStream() {
+        if (navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(async function (stream) {
+                    videoSent.srcObject = stream;
+                    prepareRecorder(stream);
+                })
+                .catch(function (error) {
+                    console.log("Something went wrong!", error);
+                });
+        }
+    }
+
+    function prepareRecorder(stream) {
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = function(e) {
+            if (ws.readyState === WebSocket.OPEN) {
+                console.log(e.data)
+                ws.send(e.data); // e.data is a Blob
+            }
+        };
+        mediaRecorder.onerror = function(e) {
+            console.log("MediaRecorder error: ", e);
+        };
+        mediaRecorder.start(3000);
+        console.log("MediaRecorder started", mediaRecorder.state);
+    }
+</script>
+</body>
+</html>
